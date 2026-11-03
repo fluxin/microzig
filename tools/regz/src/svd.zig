@@ -334,7 +334,7 @@ fn load_cluster(
                     .name = formatted_name,
                     .struct_id = struct_id,
                     .description = description,
-                    .offset_bytes = i * list.increment,
+                    .offset_bytes = address_offset + i * list.increment,
                 });
             }
         },
@@ -1532,6 +1532,53 @@ test "svd.register with dimElementGroup, %s in name with alphabetical dimIndex" 
     try expectEqual(0x8, register_f.offset_bytes);
     try expectEqual(null, register_g.count);
     try expectEqual(0xC, register_g.offset_bytes);
+}
+
+test "svd.cluster with dimElementGroup, dimIndex list, keeps its addressOffset" {
+    const text =
+        \\<device>
+        \\  <name>TEST_DEVICE</name>
+        \\  <size>32</size>
+        \\  <access>read-only</access>
+        \\  <resetValue>0x00000000</resetValue>
+        \\  <resetMask>0xffffffff</resetMask>
+        \\  <peripherals>
+        \\    <peripheral>
+        \\      <name>TEST_PERIPHERAL</name>
+        \\      <baseAddress>0x1000</baseAddress>
+        \\      <registers>
+        \\        <cluster>
+        \\          <name>CH%s</name>
+        \\          <addressOffset>0x100</addressOffset>
+        \\          <dim>2</dim>
+        \\          <dimIncrement>0x10</dimIncrement>
+        \\          <dimIndex>A,B</dimIndex>
+        \\          <register>
+        \\            <name>CTRL</name>
+        \\            <addressOffset>0</addressOffset>
+        \\          </register>
+        \\        </cluster>
+        \\      </registers>
+        \\    </peripheral>
+        \\  </peripherals>
+        \\</device>
+    ;
+
+    const doc = try xml.Doc.from_memory(text);
+    var db = try Database.create_from_doc(std.testing.allocator, .svd, doc);
+    defer db.destroy();
+
+    const peripheral_id = try db.get_peripheral_by_name("TEST_PERIPHERAL") orelse return error.MissingPeripheral;
+    const struct_id = try db.get_peripheral_struct(peripheral_id);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const fields = try db.get_nested_struct_fields_with_calculated_size(arena.allocator(), struct_id);
+
+    try expectEqual(2, fields.len);
+    for (fields) |f| {
+        if (std.mem.eql(u8, f.name, "CHA")) try expectEqual(0x100, f.offset_bytes);
+        if (std.mem.eql(u8, f.name, "CHB")) try expectEqual(0x110, f.offset_bytes);
+    }
 }
 
 test "svd.register with dimElementGroup, multiple registers" {
