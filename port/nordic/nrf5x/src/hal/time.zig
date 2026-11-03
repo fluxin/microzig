@@ -27,7 +27,16 @@ const TIMER_BITS = 23;
 /// Must use atomic operations to load/store
 var period: u32 = 0;
 
+/// Time from the RC oscillator, calibrated (`init_with` for a board with a
+/// 32.768 kHz crystal).
 pub fn init() void {
+    init_with(.RC);
+}
+
+/// Time from the low-frequency clock on `source`: a crystal needs no
+/// calibration; the RC oscillator is calibrated (bounded: if calibration
+/// does not finish it runs uncalibrated rather than hanging start-up).
+pub fn init_with(comptime source: clocks.lfclk.Source) void {
     // We only use 23 of 24 bits of the RTC to avoid a race condition where time_since_boot() is
     // called during an overflow, where we read the high bits, then an overflow occurs, then we read
     // the low bits, which overlowed and would be near 0. This means that we have to increment the
@@ -35,9 +44,9 @@ pub fn init() void {
     // First, when it hits the halfway point, and again on overflow.
 
     // Set clock source and start clock
-    clocks.lfclk.set_source(.RC);
+    clocks.lfclk.set_source(source);
     clocks.lfclk.start();
-    clocks.lfclk.calibrate();
+    if (source == .RC) _ = clocks.lfclk.calibrate();
 
     // Enable RTC0 interrupt
     microzig.cpu.interrupt.enable(.RTC0);

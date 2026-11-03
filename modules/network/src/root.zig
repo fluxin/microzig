@@ -434,6 +434,13 @@ pub const tcp = struct {
             const pcb = self.pcb orelse return Error.NotConnected;
             self.pcb = null;
             self.state = .closed;
+            // lwIP keeps the pcb after tcp_close until the FIN handshake ends
+            // and may still call back (data, an error): detach first, so no
+            // callback reaches this connection once it is reused or freed.
+            lwip.tcp_arg(pcb, null);
+            lwip.tcp_recv(pcb, null);
+            lwip.tcp_sent(pcb, null);
+            lwip.tcp_err(pcb, null);
             c_err(lwip.tcp_close(pcb)) catch |err| {
                 lwip.tcp_abort(pcb);
                 return err;
