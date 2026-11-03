@@ -27,6 +27,11 @@ pub fn build(b: *std.Build) void {
         "pbuf_header_length",
         "The number of bytes allocated in packet buffer before Ethernet header for use in the underlying link driver",
     ) orelse 0;
+    const dhcp_coarse_timer_s = b.option(
+        u32,
+        "dhcp_coarse_timer_s",
+        "Period of lwIP's DHCP lease timer in seconds (lwIP's default 60; leases renew on its ticks)",
+    ) orelse 60;
     const pbuf_length = b.option(
         u16,
         "pbuf_length",
@@ -63,6 +68,7 @@ pub fn build(b: *std.Build) void {
     lwip.addCMacro("PBUF_LINK_ENCAPSULATION_HLEN", to_s(&buf, pbuf_header_length));
     // 40 bytes IPv6 header, 20 bytes TCP header
     lwip.addCMacro("TCP_MSS", to_s(&buf, mtu - 40 - 20));
+    lwip.addCMacro("DHCP_COARSE_TIMER_SECS", to_s(&buf, dhcp_coarse_timer_s));
 
     const net_mod = b.addModule("net", .{
         .target = target,
