@@ -1,3 +1,6 @@
+> **Altered version:** this is a fork of MicroZig with changes for a private
+> project; see [FORK.md](FORK.md). It is not the original MicroZig.
+
 # ![MicroZig Logo](design/logo-text-auto.svg)
 
 > **NOTE:** This is in development; breaks in the API are bound to happen.
