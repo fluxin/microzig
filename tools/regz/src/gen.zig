@@ -891,7 +891,8 @@ const StructFieldIterator = struct {
             return switch (entry.*) {
                 .reserved => |reserved| reserved.size_bytes,
                 .register => |register| register.get_size_bytes(),
-                .nested_struct_field => |nsf| nsf.size_bytes.?,
+                // An array of structs spans every element (size_bytes is one).
+                .nested_struct_field => |nsf| nsf.size_bytes.? * (nsf.count orelse 1),
             };
         }
     };
@@ -1726,6 +1727,54 @@ test "gen.StructFieldIterator.one nested struct field and a register" {
 
     const actual_nsf = third.?.nested_struct_field;
     try expect_nested_struct_field(&expected_nsf, &actual_nsf);
+
+    try std.testing.expect(it.next() == null);
+}
+
+test "gen.StructFieldIterator.nested struct field array then a register" {
+    // As nRF52840 USBD: EPIN[8] at 0x600 with a 0x14 stride ends at 0x6a0,
+    // where the next register starts.
+    const expected_nsf = NestedStructField{
+        .parent_id = @fromBackingInt(1),
+        .struct_id = @fromBackingInt(2),
+        .offset_bytes = 0x600,
+        .name = "EPIN",
+        .description = null,
+        .count = 8,
+        .size_bytes = 0x14,
+    };
+
+    const expected_register: Register = .{
+        .id = @fromBackingInt(1),
+        .struct_id = @fromBackingInt(3),
+        .description = null,
+        .name = "ISOIN",
+        .ref_type = null,
+        .size_bits = 32,
+        .offset_bytes = 0x6a0,
+        .access = .read_write,
+        .reset_mask = 0xFFFFFFFF,
+        .reset_value = 0,
+        .count = null,
+    };
+
+    var it: StructFieldIterator = .init(&.{expected_register}, &.{expected_nsf});
+
+    // Reserved bytes up to the array
+    const first = it.next().?;
+    try std.testing.expectEqual(.reserved, std.meta.activeTag(first));
+    try std.testing.expectEqual(0, first.reserved.offset_bytes);
+    try std.testing.expectEqual(0x600, first.reserved.size_bytes);
+
+    // The array
+    const second = it.next().?;
+    try std.testing.expectEqual(.nested_struct_field, std.meta.activeTag(second));
+    try expect_nested_struct_field(&expected_nsf, &second.nested_struct_field);
+
+    // The register right after it: no reserved bytes in between
+    const third = it.next().?;
+    try std.testing.expectEqual(.register, std.meta.activeTag(third));
+    try expect_register(&expected_register, &third.register);
 
     try std.testing.expect(it.next() == null);
 }
